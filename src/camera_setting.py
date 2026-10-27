@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-
+from .orbit_plt import *
 # ★1. pointsはグローバル領域で定義する
 points = []
 
@@ -81,7 +81,9 @@ def camera_starting(video_path):
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
 
     # 全フレームの変換処理ループ
+    # 全フレームの変換処理ループ
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    tracks = {}
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -91,12 +93,16 @@ def camera_starting(video_path):
         cropped_frame = cv2.warpPerspective(frame, M, (OUT_WIDTH, OUT_HEIGHT))
 
         # --------------------------------------------------
-        # ここに今後、ビーズ検出や滞留判定の処理を追加します
+        # ★ ここを追加・修正します！
+        # process_frame に cropped_frame と tracks を渡して検出＆描画を実行
         # --------------------------------------------------
+        cropped_frame, tracks = process_frame(cropped_frame, tracks)
 
         cv2.imshow("Cropped & Normalized Frame", cropped_frame)
+
         if cv2.waitKey(30) & 0xFF == 27:  # ESCキーで終了
             break
 
     cap.release()
     cv2.destroyAllWindows()
+    plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
