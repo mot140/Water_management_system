@@ -140,3 +140,23 @@ def process_frame(img, tracks, max_distance=40):
     drawOrbit(new_tracks, img)
 
     return img, new_tracks
+
+
+def grid_cells(frame,rows=80,cols=40):
+    height = frame.shape[0]
+    width = frame.shape[1]
+
+    shreds = []
+    for i, shred in enumerate(np.array_split(img, rows, axis=0)):
+        if i != 0:
+            shred = np.pad(shred, ((5, 0), (0, 0), (0, 0)), constant_values=255)
+        shreds.append(shred)
+    encoded = cv2.imencode(".jpg", np.concatenate(shreds, axis=0))[1]
+    cv2.imshow("division",encoded)
+
+if __name__ == "__main__":
+    img = cv2.imread("bead_trajectories.png")
+    if img is not None:
+        grid_cells(img)
+    else:
+        print("画像ファイルの読み込みに失敗しました。パスを確認してください。")
