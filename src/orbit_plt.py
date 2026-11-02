@@ -102,9 +102,11 @@ def plot_trajectories(
 
 def process_frame(img, tracks, max_distance=40):
     """1フレームごとの検出とトラッキング（軌跡の更新）"""
+    chunk = split_img(img)
     mask = blue_detect(img)
     centers = get_centers(mask)
-
+    draw = draw_Orbit(centers,chunk,img)
+    #draw_pqint = draw_Orbit(centers,chunk)
     # 簡易トラッキング（前フレームの点と紐付け）
     new_tracks = {}
     used_centers = set()
@@ -142,21 +144,98 @@ def process_frame(img, tracks, max_distance=40):
     return img, new_tracks
 
 
-def grid_cells(frame,rows=80,cols=40):
-    height = frame.shape[0]
-    width = frame.shape[1]
+def split_img(frame, rows=80, cols=40, preview=True, output_grid_path="grid_result.png"):
+    chunks = []
+    h, w = frame.shape[:2]
+    frame_copy = frame.copy()
 
-    shreds = []
-    for i, shred in enumerate(np.array_split(img, rows, axis=0)):
-        if i != 0:
-            shred = np.pad(shred, ((5, 0), (0, 0), (0, 0)), constant_values=255)
-        shreds.append(shred)
-    encoded = cv2.imencode(".jpg", np.concatenate(shreds, axis=0))[1]
-    cv2.imshow("division",encoded)
+    # 1. チャンクの分割切り出し
+    for row_img in np.array_split(frame, rows, axis=0):
+        for chunk in np.array_split(row_img, cols, axis=1):
+            chunks.append(chunk)
+
+    # 2. 横線（Y軸方向）の描画
+    row_splits = np.array_split(np.arange(h), rows)
+    for row_indices in row_splits:
+        y = row_indices[0]
+        cv2.line(frame_copy, (0, y), (w, y), (0, 0, 255), 1)
+    cv2.line(frame_copy, (0, h - 1), (w, h - 1), (0, 0, 255), 1)
+
+    # 3. 縦線（X軸方向）の描画
+    col_splits = np.array_split(np.arange(w), cols)
+    for col_indices in col_splits:
+        x = col_indices[0]
+        cv2.line(frame_copy, (x, 0), (x, h), (0, 0, 255), 1)
+    cv2.line(frame_copy, (w - 1, 0), (w - 1, h), (0, 0, 255), 1)
+
+
+    # 5. グリッド線付き全体画像の保存・表示
+    cv2.imwrite(output_grid_path, frame_copy)
+    print(f"グリッド付き全体系画像を保存しました: {output_grid_path}")
+    
+    if preview:
+        cv2.imshow("Full Image with Grid", frame_copy)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    
+    return chunks
+
+def draw_Orbit(centers, chunks, frame, rows=80, cols=40):
+    """
+    1フレーム内の全 center 座標と chunks を受け取り、
+    青色検証・格子セルの緑色着色・中心点描画をまとめて実行する関数（追跡なし）
+
+    :param centers: ビーズの中心座標リスト [(x1, y1), (x2, y2), ...]
+    :param chunks: split_img で生成された全格子セル画像のリスト (3200個)
+    :param frame: 描画対象のフレーム画像
+    :param rows: 行数 (80)
+    :param cols: 列数 (40)
+    :return: 描画・着色後の frame, 着色された格子セル座標リスト [(r, c), ...]
+    """
+    h, w = frame.shape[:2]
+    overlay = frame.copy()
+    colored_cells = []
+
+    row_splits = np.array_split(np.arange(h), rows)
+    col_splits = np.array_split(np.arange(w), cols)
+
+    for cx, cy in centers:
+        if 0 <= cx < w and 0 <= cy < h:
+            # 1. 重心座標 (cx, cy) から 80x40 の 行 (r) と 列 (c) を算出
+            c = int(cx // (w / cols))
+            r = int(cy // (h / rows))
+
+            r = min(max(r, 0), rows - 1)
+            c = min(max(c, 0), cols - 1)
+
+            # 2. 該当する chunk を取得
+            idx = r * cols + c
+            chunk = chunks[idx]
+
+            # 3. chunk 内の BGR 画素値を利用した青色判定
+            blue_channel = chunk[:, :, 0]
+            red_channel = chunk[:, :, 2]
+            blue_pixels = np.count_nonzero((blue_channel > 90) & (blue_channel > red_channel + 20))
+
+            # 4. 青色判定を満たした場合、格子セルを塗りつぶし対象に登録
+            if blue_pixels >= 3:
+                colored_cells.append((r, c))
+                y1, y2 = row_splits[r][0], row_splits[r][-1]
+                x1, x2 = col_splits[c][0], col_splits[c][-1]
+                cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 255, 0), -1)
+
+            # 5. 中心位置に緑色の丸を描画
+            cv2.circle(frame, (cx, cy), 4, (0, 255, 0), -1)
+
+    # 緑色着色レイヤーを一括で半透明合成 (透過度 0.4)
+    frame_result = cv2.addWeighted(overlay, 0.4, frame, 0.6, 0)
+
+    return frame_result, colored_cells
+    
 
 if __name__ == "__main__":
-    img = cv2.imread("bead_trajectories.png")
+    img = cv2.imread("last_frame.png")
     if img is not None:
-        grid_cells(img)
+        chunks = split_img(img, rows=80, cols=40)
     else:
         print("画像ファイルの読み込みに失敗しました。パスを確認してください。")
