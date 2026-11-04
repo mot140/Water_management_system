@@ -20,11 +20,12 @@ def mouse_callback(event, x, y, flags, params):
 def camera_starting(video_path):
     global points
     points = []  # 再実行用に初期化
-
     OUT_WIDTH = 400
     OUT_HEIGHT = 800
     folder = get_next_dir_number()
     cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    print(fps)
     cnt = 0
     tracks = {}
     records = []          # ← 追加：塗ったセルの記録用
