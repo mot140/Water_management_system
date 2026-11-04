@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from .orbit_plt import *
+from .save_frame import *
+import os
 # ★1. pointsはグローバル領域で定義する
 points = []
 
@@ -13,14 +15,21 @@ def mouse_callback(event, x, y, flags, params):
             print(f"点 {len(points)} を指定: ({x}, {y})")
 
 
+
+
 def camera_starting(video_path):
     global points
     points = []  # 再実行用に初期化
 
     OUT_WIDTH = 400
     OUT_HEIGHT = 800
-
+    folder = get_next_dir_number()
     cap = cv2.VideoCapture(video_path)
+    cnt = 0
+    tracks = {}
+    records = []          # ← 追加：塗ったセルの記録用
+    frame_no = 0
+
     if not cap.isOpened():
         print("動画を開けませんでした")
         return
@@ -84,9 +93,10 @@ def camera_starting(video_path):
     # 全フレームの変換処理ループ
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     tracks = {}
-
+    save_frame(display_img,str(folder),str(cnt))
     while cap.isOpened():
         ret, frame = cap.read()
+        cnt += 1
         if not ret:
             break
 
@@ -96,13 +106,14 @@ def camera_starting(video_path):
         # ★ ここを追加・修正します！
         # process_frame に cropped_frame と tracks を渡して検出＆描画を実行
         # --------------------------------------------------
-        cropped_frame, tracks = process_frame(cropped_frame, tracks)
+        cropped_frame, tracks = process_frame(cropped_frame, tracks,frame_no=frame_no,records=records)
 
         cv2.imshow("Cropped & Normalized Frame", cropped_frame)
-
+        save_frame(cropped_frame,str(folder),str(cnt))
         if cv2.waitKey(30) & 0xFF == 27:  # ESCキーで終了
             break
 
     cap.release()
     cv2.destroyAllWindows()
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
+    save_cells_csv(records, "colored_cells.csv")
