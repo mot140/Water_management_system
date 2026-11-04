@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-
+import time
 ROWS, COLS = 80, 40
 
 
