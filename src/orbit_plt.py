@@ -4,7 +4,15 @@ import matplotlib.pyplot as plt
 import csv
 import time
 ROWS, COLS = 80, 40
-
+test_list = []
+def new_count_cells():
+    All_cells = ROWS * COLS
+    dict_cells = {}
+    for ROW in range(ROWS):
+        for COL in range(COLS):
+            dict_cells[(ROW, COL)] = 0
+    print("dict_cells:", dict_cells)
+    return dict_cells,All_cells
 
 def blue_detect(img):
     """HSVでの青色抽出"""
@@ -112,6 +120,8 @@ def fill_cells(frame, centers, rows=ROWS, cols=COLS, color=(0, 255, 0), alpha=0.
             cv2.rectangle(overlay, (x1, y1), (x2, y2), color, -1)
 
     result = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+    test_list.append(len(colored_cells))
+    print(f"塗りつぶされたセルの数: {sum((test_list))} (累積), {len(colored_cells)} (今回))")
     return result, colored_cells
 
 
@@ -175,15 +185,17 @@ def plot_trajectories(tracks, width=400, height=800, save_path="bead_trajectorie
     plt.show()
 
 
-def process_frame(img, tracks, max_distance=40, draw_orbit=False, show_grid=True, touch_radius=5,frame_no=0, records=None):
+def process_frame(img, tracks, cell_dic:dict,max_distance=40, draw_orbit=False, show_grid=True, touch_radius=5,frame_no=0, records=None):
     """1フレームごとの検出・格子の塗りつぶし・格子線表示・トラッキング"""
     mask = blue_detect(img)
     centers = get_centers(mask)
-    h, w = img.shape[:2] 
+    h, w = img.shape[:2]
     # centerに触れている格子セルを塗る
     img, colored_cells = fill_cells(img, centers, touch_radius=touch_radius)
+    #print(colored_cells)
     # ↓ 追加：塗ったセルの座標を記録（行・列の順に並べる）
     if records is not None:
+        cell_dic = count_cells(colored_cells, cell_dic)
         for r, c in sorted(colored_cells):
             x1, y1, x2, y2 = cell_rect(r, c, w, h)
             records.append(
@@ -225,16 +237,21 @@ def process_frame(img, tracks, max_distance=40, draw_orbit=False, show_grid=True
     if draw_orbit:
         drawOrbit(new_tracks, img)
 
-    return img, new_tracks
+    return img, new_tracks,cell_dic
 
+def sum_colored_cells(cell_dic):
+    """recordsから塗られたセルの総数を返す"""
+    #print("現在のセルカウント:", cell_dic)
+    sum_dict_value = 0
+    for value in cell_dic.values():
+        sum_dict_value += value
+    print(f"総塗りつぶしセル数: {sum_dict_value}")
+    return sum_dict_value
 
-if __name__ == "__main__":
-    img = cv2.imread("last_frame.png")
-    if img is not None:
-        out, tracks = process_frame(img, {})
-        cv2.imwrite("grid_result.png", out)
-        cv2.imshow("Grid + Filled Cells", out)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    else:
-        print("画像ファイルの読み込みに失敗しました。パスを確認してください。")
+def count_cells(colored_cells,cell_dict):
+    """着色されたセルの数を返す"""
+    for r, c in colored_cells:
+        cell_dict[(r, c)] += 1
+    #print("現在のセルカウント:", cell_dict)
+    return cell_dict
+

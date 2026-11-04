@@ -36,6 +36,7 @@ def camera_starting(video_path):
         return
 
     ret, frame = cap.read()
+    print(int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
     if not ret:
         print("フレームの読み込みに失敗しました")
         return
@@ -46,7 +47,7 @@ def camera_starting(video_path):
 
     print("トレイの4角を [左上 -> 右上 -> 右下 -> 左下] の順でクリックしてください。")
     print("4点選択後、EnterまたはSpaceキーを押すと確定します。")
-
+    cell_dict, All_cells = new_count_cells()  # ← 追加：セルの初期化
     # 手動指定のループ
     while True:
         display_img = frame.copy()
@@ -107,7 +108,7 @@ def camera_starting(video_path):
         # ★ ここを追加・修正します！
         # process_frame に cropped_frame と tracks を渡して検出＆描画を実行
         # --------------------------------------------------
-        cropped_frame, tracks = process_frame(cropped_frame, tracks,frame_no=frame_no,records=records)
+        cropped_frame, tracks,cell_dict = process_frame(cropped_frame, tracks,cell_dic=cell_dict,frame_no=frame_no,records=records)
 
         cv2.imshow("Cropped & Normalized Frame", cropped_frame)
         save_frame(cropped_frame,str(folder),str(cnt))
@@ -118,3 +119,4 @@ def camera_starting(video_path):
     cv2.destroyAllWindows()
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
     save_cells_csv(records, "colored_cells.csv")
+    sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
