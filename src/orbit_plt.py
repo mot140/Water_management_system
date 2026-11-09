@@ -10,7 +10,7 @@ def new_count_cells():
     dict_cells = {}
     for ROW in range(ROWS):
         for COL in range(COLS):
-            dict_cells[(ROW, COL)] = 0
+            dict_cells[(ROW, COL)] = {"con": 0 ,"ave":0}
     print("dict_cells:", dict_cells)
     return dict_cells,All_cells
 
@@ -121,7 +121,7 @@ def fill_cells(frame, centers, rows=ROWS, cols=COLS, color=(0, 255, 0), alpha=0.
 
     result = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
     test_list.append(len(colored_cells))
-    print(f"塗りつぶされたセルの数: {sum((test_list))} (累積), {len(colored_cells)} (今回))")
+    #print(f"塗りつぶされたセルの数: {sum((test_list))} (累積), {len(colored_cells)} (今回))")
     return result, colored_cells
 
 
@@ -244,14 +244,22 @@ def sum_colored_cells(cell_dic):
     #print("現在のセルカウント:", cell_dic)
     sum_dict_value = 0
     for value in cell_dic.values():
-        sum_dict_value += value
-    print(f"総塗りつぶしセル数: {sum_dict_value}")
+        sum_dict_value += value["con"]
+    #print(f"総塗りつぶしセル数: {sum_dict_value}")
     return sum_dict_value
 
 def count_cells(colored_cells,cell_dict):
     """着色されたセルの数を返す"""
     for r, c in colored_cells:
-        cell_dict[(r, c)] += 1
+        cell_dict[(r, c)]["con"] += 1
     #print("現在のセルカウント:", cell_dict)
     return cell_dict
 
+def cells_ave(cell_dict):
+    max_sum = sum_colored_cells(cell_dict)
+    if max_sum == 0:
+        return cell_dict
+    for r, c in cell_dict:
+        ave = cell_dict[(r, c)]["con"] / max_sum
+        cell_dict[(r, c)]["ave"] += ave
+    return cell_dict

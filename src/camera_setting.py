@@ -30,11 +30,9 @@ def camera_starting(video_path):
     tracks = {}
     records = []          # ← 追加：塗ったセルの記録用
     frame_no = 0
-
     if not cap.isOpened():
         print("動画を開けませんでした")
         return
-
     ret, frame = cap.read()
     print(int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
     if not ret:
@@ -47,7 +45,7 @@ def camera_starting(video_path):
 
     print("トレイの4角を [左上 -> 右上 -> 右下 -> 左下] の順でクリックしてください。")
     print("4点選択後、EnterまたはSpaceキーを押すと確定します。")
-    cell_dict, All_cells = new_count_cells()  # ← 追加：セルの初期化
+    cell_dict, All_cells = new_count_cells()  
     # 手動指定のループ
     while True:
         display_img = frame.copy()
@@ -101,7 +99,6 @@ def camera_starting(video_path):
         cnt += 1
         if not ret:
             break
-
         cropped_frame = cv2.warpPerspective(frame, M, (OUT_WIDTH, OUT_HEIGHT))
 
         # --------------------------------------------------
@@ -119,4 +116,6 @@ def camera_starting(video_path):
     cv2.destroyAllWindows()
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
     save_cells_csv(records, "colored_cells.csv")
-    sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
+    #sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
+    ave = cells_ave(cell_dict)
+    print(ave)
