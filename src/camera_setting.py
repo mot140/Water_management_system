@@ -94,6 +94,7 @@ def camera_starting(video_path):
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     tracks = {}
     save_frame(display_img,str(folder),str(cnt))
+    base_frame = cv2.warpPerspective(frame, M, (OUT_WIDTH, OUT_HEIGHT))
     while cap.isOpened():
         ret, frame = cap.read()
         cnt += 1
@@ -118,4 +119,8 @@ def camera_starting(video_path):
     save_cells_csv(records, "colored_cells.csv")
     #sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
     ave = cells_ave(cell_dict,fps)
+    save_lrt_csv(cell_dict, save_path="cell_lrt_summary.csv")
+    if base_frame is not None:
+        save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path="lrt_mean_heatmap.png")
+        save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path="lrt_max_heatmap.png")
     print(ave)

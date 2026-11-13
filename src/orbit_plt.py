@@ -2,17 +2,29 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-import time
+
 ROWS, COLS = 80, 40
 test_list = []
+
+
 def new_count_cells():
     All_cells = ROWS * COLS
     dict_cells = {}
     for ROW in range(ROWS):
         for COL in range(COLS):
-            dict_cells[(ROW, COL)] = {"con": 0 ,"ave":0 ,"sec":0}
+            dict_cells[(ROW, COL)] = {
+                "con": 0,
+                "ave": 0,
+                "sec": 0,
+                "mean_lrt": 0,
+                "max_lrt": 0,
+                # ↓ LRT（連続滞在フレーム数）計測用に追記
+                "lrt_frames": [],
+                "active_beads": {},
+            }
     print("dict_cells:", dict_cells)
-    return dict_cells,All_cells
+    return dict_cells, All_cells
+
 
 def blue_detect(img):
     """淡い水色・半透明ビーズも拾えるように調整したHSV抽出"""
@@ -69,6 +81,7 @@ def get_centers(binary_img, min_area=15, min_dist=18):
         detected_centers.append((cx, cy))
 
     return detected_centers
+
 
 def cell_rect(r, c, w, h, rows=ROWS, cols=COLS):
     """セル(r, c)の画素範囲 (x1, y1, x2, y2) を返す"""
@@ -147,7 +160,6 @@ def fill_cells(frame, centers, rows=ROWS, cols=COLS, color=(0, 255, 0), alpha=0.
 
     result = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
     test_list.append(len(colored_cells))
-    #print(f"塗りつぶされたセルの数: {sum((test_list))} (累積), {len(colored_cells)} (今回))")
     return result, colored_cells
 
 
@@ -211,14 +223,37 @@ def plot_trajectories(tracks, width=400, height=800, save_path="bead_trajectorie
     plt.show()
 
 
-def process_frame(img, tracks, cell_dic:dict,max_distance=40, draw_orbit=False, show_grid=True, touch_radius=5,frame_no=0, records=None):
+# ↓ 新しく追記したLRT更新用ヘルパー関数
+def update_lrt_frames(cell_dic, active_beads_cells):
+    """
+    各ビーズのセル進入〜脱出を追跡し、連続滞在フレーム数を記録する
+    active_beads_cells: {bead_id: {(r, c), ...}}
+    """
+    for (r, c), info in cell_dic.items():
+        active = info["active_beads"]
+        next_active = {}
+        for bead_id, stay_frames in active.items():
+            if bead_id in active_beads_cells and (r, c) in active_beads_cells[bead_id]:
+                next_active[bead_id] = stay_frames + 1
+            else:
+                info["lrt_frames"].append(stay_frames)
+        info["active_beads"] = next_active
+
+    for bead_id, cells in active_beads_cells.items():
+        for (r, c) in cells:
+            if bead_id not in cell_dic[(r, c)]["active_beads"]:
+                cell_dic[(r, c)]["active_beads"][bead_id] = 1
+
+
+def process_frame(img, tracks, cell_dic: dict, max_distance=40, draw_orbit=False, show_grid=True, touch_radius=5, frame_no=0, records=None):
     """1フレームごとの検出・格子の塗りつぶし・格子線表示・トラッキング"""
     mask = blue_detect(img)
     centers = get_centers(mask)
     h, w = img.shape[:2]
+
     # centerに触れている格子セルを塗る
     img, colored_cells = fill_cells(img, centers, touch_radius=touch_radius)
-    #print(colored_cells)
+
     # ↓ 追加：塗ったセルの座標を記録（行・列の順に並べる）
     if records is not None:
         cell_dic = count_cells(colored_cells, cell_dic)
@@ -227,6 +262,7 @@ def process_frame(img, tracks, cell_dic:dict,max_distance=40, draw_orbit=False, 
             records.append(
                 {"frame": frame_no, "row": r, "col": c, "x1": x1, "y1": y1, "x2": x2, "y2": y2}
             )
+
     # 塗りつぶしの上に格子線を重ねる
     if show_grid:
         draw_grid_lines(img)
@@ -234,6 +270,7 @@ def process_frame(img, tracks, cell_dic:dict,max_distance=40, draw_orbit=False, 
     # 簡易トラッキング（前フレームの点と紐付け）
     new_tracks = {}
     used_centers = set()
+    active_centers = {}  # ↓ LRT用に今フレーム検出された {bead_id: (cx, cy)} を保持
 
     for bead_id, history in tracks.items():
         last_pos = history[-1]
@@ -251,6 +288,7 @@ def process_frame(img, tracks, cell_dic:dict,max_distance=40, draw_orbit=False, 
         if best_idx != -1:
             new_tracks[bead_id] = history + [centers[best_idx]]
             used_centers.add(best_idx)
+            active_centers[bead_id] = centers[best_idx]
         else:
             new_tracks[bead_id] = history
 
@@ -258,35 +296,127 @@ def process_frame(img, tracks, cell_dic:dict,max_distance=40, draw_orbit=False, 
     for idx, center in enumerate(centers):
         if idx not in used_centers:
             new_tracks[next_id] = [center]
+            active_centers[next_id] = center
             next_id += 1
+
+    # ↓ 追記：各ビーズごとのセル進入・滞在・脱出を更新
+    active_beads_cells = {}
+    for bead_id, (cx, cy) in active_centers.items():
+        if 0 <= cx < w and 0 <= cy < h:
+            active_beads_cells[bead_id] = set(touched_cells(cx, cy, w, h, ROWS, COLS, touch_radius))
+    update_lrt_frames(cell_dic, active_beads_cells)
 
     if draw_orbit:
         drawOrbit(new_tracks, img)
 
-    return img, new_tracks,cell_dic
+    return img, new_tracks, cell_dic
+
 
 def sum_colored_cells(cell_dic):
     """recordsから塗られたセルの総数を返す"""
-    #print("現在のセルカウント:", cell_dic)
     sum_dict_value = 0
     for value in cell_dic.values():
         sum_dict_value += value["con"]
-    #print(f"総塗りつぶしセル数: {sum_dict_value}")
     return sum_dict_value
 
-def count_cells(colored_cells,cell_dict):
+
+def count_cells(colored_cells, cell_dict):
     """着色されたセルの数を返す"""
     for r, c in colored_cells:
         cell_dict[(r, c)]["con"] += 1
-    #print("現在のセルカウント:", cell_dict)
     return cell_dict
 
-def cells_ave(cell_dict,fps):
+
+def cells_ave(cell_dict, fps):
+    """空間比率(ave)・累積滞在秒数(sec)・ラグランジュ滞在時間(mean_lrt, max_lrt)を算出"""
     max_sum = sum_colored_cells(cell_dict)
-    if max_sum == 0:
-        return cell_dict
+    fps_val = fps if fps and fps > 0 else 30
+
     for r, c in cell_dict:
-        ave = cell_dict[(r, c)]["con"] / max_sum
-        cell_dict[(r, c)]["ave"] += ave
-        cell_dict[(r, c)]["sec"] += ave / fps
+        # 1. 空間比率 (ave) と 累積滞在秒数 (sec)
+        if max_sum > 0:
+            ave = cell_dict[(r, c)]["con"] / max_sum
+            cell_dict[(r, c)]["ave"] += ave
+        cell_dict[(r, c)]["sec"] = cell_dict[(r, c)]["con"] / fps_val
+
+        # 2. ↓ 追記：ラグランジュ滞留時間 (mean_lrt, max_lrt) の確定
+        # 動画終了時点でセル内に残っていたビーズの滞在フレームも確定リストへ追加
+        for stay_frames in cell_dict[(r, c)]["active_beads"].values():
+            cell_dict[(r, c)]["lrt_frames"].append(stay_frames)
+        cell_dict[(r, c)]["active_beads"].clear()
+
+        lrt_list = cell_dict[(r, c)]["lrt_frames"]
+        if lrt_list:
+            cell_dict[(r, c)]["mean_lrt"] = float(np.mean(lrt_list)) / fps_val
+            cell_dict[(r, c)]["max_lrt"] = float(np.max(lrt_list)) / fps_val
+        else:
+            cell_dict[(r, c)]["mean_lrt"] = 0.0
+            cell_dict[(r, c)]["max_lrt"] = 0.0
+
     return cell_dict
+
+
+# ↓ 新しく追記したCSV出力・ヒートマップ描画関数
+def save_lrt_csv(cell_dict, save_path="cell_lrt_summary.csv"):
+    """各セルの滞留指標（con, ave, sec, mean_lrt, max_lrt）をCSVに保存する"""
+    fieldnames = ["row", "col", "con", "pass_count", "ave", "sec", "mean_lrt", "max_lrt"]
+    with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for (r, c), val in sorted(cell_dict.items()):
+            writer.writerow({
+                "row": r,
+                "col": c,
+                "con": val["con"],
+                "pass_count": len(val["lrt_frames"]),
+                "ave": round(val["ave"], 6),
+                "sec": round(val["sec"], 3),
+                "mean_lrt": round(val["mean_lrt"], 3),
+                "max_lrt": round(val["max_lrt"], 3),
+            })
+    print(f"滞留指標CSVを保存しました: {save_path}")
+
+
+def save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", alpha=0.55, save_path="lrt_heatmap.png"):
+    """
+    指定したキー（"mean_lrt", "max_lrt", "sec" など）のヒートマップを元画像に重ねて保存する
+    """
+    h, w = base_frame.shape[:2]
+    val_grid = np.zeros((ROWS, COLS), dtype=np.float32)
+    mask_grid = np.zeros((ROWS, COLS), dtype=np.uint8)
+
+    for (r, c), val in cell_dict.items():
+        val_grid[r, c] = val[key]
+        if val["con"] > 0:
+            mask_grid[r, c] = 1
+
+    max_val = float(val_grid.max())
+    if max_val == 0:
+        print(f"【警告】{key} のデータがすべて0のため、ヒートマップを出力しません。")
+        return
+
+    norm_grid = np.uint8(np.clip((val_grid / max_val) * 255, 0, 255))
+    colored_grid = cv2.applyColorMap(norm_grid, cv2.COLORMAP_JET)
+
+    heatmap_img = cv2.resize(colored_grid, (w, h), interpolation=cv2.INTER_NEAREST)
+    active_mask = cv2.resize(mask_grid, (w, h), interpolation=cv2.INTER_NEAREST)
+
+    blended = cv2.addWeighted(heatmap_img, alpha, base_frame, 1 - alpha, 0)
+    output_frame = base_frame.copy()
+    output_frame[active_mask == 1] = blended[active_mask == 1]
+
+    # ↓ ax を明示的に指定してカラーバーを描画
+    fig, ax = plt.subplots(figsize=(8, 10))
+    ax.imshow(cv2.cvtColor(output_frame, cv2.COLOR_BGR2RGB))
+
+    sm = plt.cm.ScalarMappable(cmap="jet", norm=plt.Normalize(vmin=0, vmax=max_val))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label(f"{key} (sec)", fontsize=11)
+
+    ax.set_title(f"Residence Heatmap ({key})", fontsize=13, weight="bold")
+    ax.axis("off")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"ヒートマップを保存しました: {save_path}")
