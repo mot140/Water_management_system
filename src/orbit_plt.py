@@ -10,37 +10,63 @@ def new_count_cells():
     dict_cells = {}
     for ROW in range(ROWS):
         for COL in range(COLS):
-            dict_cells[(ROW, COL)] = {"con": 0 ,"ave":0}
+            dict_cells[(ROW, COL)] = {"con": 0 ,"ave":0 ,"sec":0}
     print("dict_cells:", dict_cells)
     return dict_cells,All_cells
 
 def blue_detect(img):
-    """HSVでの青色抽出"""
-    Blue_MIN = np.array([85, 50, 50])
-    Blue_Max = np.array([135, 255, 255])
+    """淡い水色・半透明ビーズも拾えるように調整したHSV抽出"""
+    # 彩度(S)の下限を 50 -> 20 に下げて淡い水色を拾う
+    Blue_MIN = np.array([80, 20, 40])
+    Blue_Max = np.array([140, 255, 255])
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv_img, Blue_MIN, Blue_Max)
 
-    # ノイズ除去（オープニング処理）
-    kernel = np.ones((3, 3), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    # 1. 小さなゴミを除去（オープニング）
+    kernel_open = np.ones((3, 3), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
+
+    # 2. ビーズ中心の白い光反射（穴あき）を埋める（クロージング）
+    kernel_close = np.ones((7, 7), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
+
     return mask
 
 
-def get_centers(binary_img, min_area=15):
-    """ラベリング処理により指定面積以上の全ビーズの重心座標(x, y)リストを取得"""
-    nlabels, labels, stats, centers = cv2.connectedComponentsWithStats(binary_img)
+def get_centers(binary_img, min_area=15, min_dist=18):
+    """
+    くっついたビーズを分離しつつ、淡く検出されたビーズも取りこぼさない中心検出
+    ※画像サイズを見る限りビーズ1個の直径が約25〜35pxあるため、min_distの初期値を18に設定
+    """
+    nlabels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_img)
+    clean_mask = np.zeros_like(binary_img)
+    for i in range(1, nlabels):
+        if stats[i, cv2.CC_STAT_AREA] >= min_area:
+            clean_mask[labels == i] = 255
 
-    if nlabels <= 1:
+    if np.count_nonzero(clean_mask) == 0:
         return []
 
+    # 距離変換
+    dist = cv2.distanceTransform(clean_mask, cv2.DIST_L2, 5)
+
+    # 局所最大値（ビーズ直径の6〜7割程度のカーネルでピークを探す）
+    kernel_size = int(min_dist)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    local_max = (dist == cv2.dilate(dist, kernel))
+
+    # 全体の最大値(dist.max())に引っ張られないよう、固定の最小半径(2.0px以上)で判定
+    peaks = local_max & (dist >= 2.0)
+
+    peak_labels, _, _, centroids = cv2.connectedComponentsWithStats(peaks.astype(np.uint8))
+
     detected_centers = []
-    for i in range(1, nlabels):
-        area = stats[i, cv2.CC_STAT_AREA]
-        if area >= min_area:
-            cx = int(centers[i][0])
-            cy = int(centers[i][1])
-            detected_centers.append((cx, cy))
+    for i in range(1, peak_labels):
+        cx = int(centroids[i][0])
+        cy = int(centroids[i][1])
+        detected_centers.append((cx, cy))
 
     return detected_centers
 
@@ -255,11 +281,12 @@ def count_cells(colored_cells,cell_dict):
     #print("現在のセルカウント:", cell_dict)
     return cell_dict
 
-def cells_ave(cell_dict):
+def cells_ave(cell_dict,fps):
     max_sum = sum_colored_cells(cell_dict)
     if max_sum == 0:
         return cell_dict
     for r, c in cell_dict:
         ave = cell_dict[(r, c)]["con"] / max_sum
         cell_dict[(r, c)]["ave"] += ave
+        cell_dict[(r, c)]["sec"] += ave / fps
     return cell_dict

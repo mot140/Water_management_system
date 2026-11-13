@@ -117,5 +117,5 @@ def camera_starting(video_path):
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
     save_cells_csv(records, "colored_cells.csv")
     #sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
-    ave = cells_ave(cell_dict)
+    ave = cells_ave(cell_dict,fps)
     print(ave)
