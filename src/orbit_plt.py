@@ -189,7 +189,7 @@ def drawOrbit(tracks, frame):
         cv2.circle(frame, current_pt, 5, (0, 255, 0), thickness=-1)
 
 
-def plot_trajectories(tracks, width=400, height=800, save_path="bead_trajectories.png"):
+def plot_trajectories(tracks, width=400, height=800, save_path="test_folder/bead_trajectories.png"):
     """ビーズの全軌跡を Matplotlib で描画・保存する"""
     if not tracks:
         print("【警告】軌跡データ (tracks) が空のため、グラフを描画できません。")

@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from .orbit_plt import *
 from .save_frame import *
+from .action import *
 import os
 # ★1. pointsはグローバル領域で定義する
 points = []
@@ -13,8 +14,6 @@ def mouse_callback(event, x, y, flags, params):
         if len(points) < 4:
             points.append((x, y))
             print(f"点 {len(points)} を指定: ({x}, {y})")
-
-
 
 
 def camera_starting(video_path):
@@ -119,8 +118,38 @@ def camera_starting(video_path):
     save_cells_csv(records, "colored_cells.csv")
     #sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
     ave = cells_ave(cell_dict,fps)
-    save_lrt_csv(cell_dict, save_path="cell_lrt_summary.csv")
+    save_lrt_csv(cell_dict, save_path="test_folder/cell_lrt_summary.csv")
     if base_frame is not None:
-        save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path="lrt_mean_heatmap.png")
-        save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path="lrt_max_heatmap.png")
+        save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path="test_folder/lrt_mean_heatmap.png")
+        save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path="test_folder/lrt_max_heatmap.png")
     print(ave)
+    # --- 既存のヒートマップ保存処理のあとに追加 ---
+
+    # 1. 実測の軌跡データ(tracks)から、現在の流れやすさ・抵抗マップを抽出
+    resistance_map, mean_speed = extract_flow_resistance_from_tracks(tracks, fps=fps)
+
+    # 2. 現在の条件（例：勾配 3.0度）でのシミュレーション結果
+    sim_before = run_bead_simulation(
+        resistance_map,
+        base_speed=mean_speed,
+        base_slope_deg=3.0,
+        sim_slope_deg=3.0,
+        fps=int(round(fps)) or 30,
+    )
+
+    # 3. 条件を変えた場合（例：勾配を 5.5度に急にした場合）のシミュレーション
+    sim_after = run_bead_simulation(
+        resistance_map,
+        base_speed=mean_speed,
+        base_slope_deg=3.0,
+        sim_slope_deg=5.5,
+        fps=int(round(fps)) or 30,
+    )
+
+    # 4. 改善前後の比較画像を出力（simulation_comparison.png）
+    plot_simulation_comparison(
+        sim_before,
+        sim_after,
+        title_before="Before (3.0 deg)",
+        title_after="After (5.5 deg)",
+    )
