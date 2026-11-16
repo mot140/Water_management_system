@@ -17,6 +17,11 @@ def get_next_dir_number(video_path,base_path="img"):
     print(f"  保存先フォルダ: '{output_dir}/'")
     return output_dir,video_stem
 
+def make_dir(video_path,base_path="data"):
+    video_stem = os.path.splitext(os.path.basename(video_path))[0]
+    output_dir = os.path.join(base_path, video_stem)
+    os.makedirs(output_dir, exist_ok=True)
+    return output_dir
 
 if __name__ == "__main__":
     # 次のフォルダ番号を取得

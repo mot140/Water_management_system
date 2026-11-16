@@ -16,6 +16,7 @@ def mouse_callback(event, x, y, flags, params):
 
 
 def camera_starting(video_path):
+    make_dir(video_path)
     global points
     points = []  # 再実行用に初期化
     OUT_WIDTH = 400
