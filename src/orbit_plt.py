@@ -90,7 +90,7 @@ def cell_rect(r, c, w, h, rows=ROWS, cols=COLS):
     return x1, y1, x2, y2
 
 
-def save_cells_csv(records, save_path="colored_cells.csv"):
+def save_cells_csv(records, save_path="data/colored_cells.csv"):
     """
     塗ったセルの座標をCSVに出力する。
     records: [{"frame": int, "row": int, "col": int, "x1": .., "y1": .., "x2": .., "y2": ..}, ...]
@@ -189,7 +189,7 @@ def drawOrbit(tracks, frame):
         cv2.circle(frame, current_pt, 5, (0, 255, 0), thickness=-1)
 
 
-def plot_trajectories(tracks, width=400, height=800, save_path="test_folder/bead_trajectories.png"):
+def plot_trajectories(tracks, width=400, height=800, save_path="data/bead_trajectories.png"):
     """ビーズの全軌跡を Matplotlib で描画・保存する"""
     if not tracks:
         print("【警告】軌跡データ (tracks) が空のため、グラフを描画できません。")
@@ -357,7 +357,7 @@ def cells_ave(cell_dict, fps):
 
 
 # ↓ 新しく追記したCSV出力・ヒートマップ描画関数
-def save_lrt_csv(cell_dict, save_path="cell_lrt_summary.csv"):
+def save_lrt_csv(cell_dict, save_path="data/cell_lrt_summary.csv"):
     """各セルの滞留指標（con, ave, sec, mean_lrt, max_lrt）をCSVに保存する"""
     fieldnames = ["row", "col", "con", "pass_count", "ave", "sec", "mean_lrt", "max_lrt"]
     with open(save_path, "w", newline="", encoding="utf-8-sig") as f:

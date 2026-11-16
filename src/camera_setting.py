@@ -3,7 +3,7 @@ import numpy as np
 from .orbit_plt import *
 from .save_frame import *
 import os
-# ★1. pointsはグローバル領域で定義する
+
 points = []
 
 
@@ -20,7 +20,7 @@ def camera_starting(video_path):
     points = []  # 再実行用に初期化
     OUT_WIDTH = 400
     OUT_HEIGHT = 800
-    folder = get_next_dir_number(video_path)
+    folder,video_stem = get_next_dir_number(video_path)
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     print(fps)
@@ -80,15 +80,12 @@ def camera_starting(video_path):
 
     cv2.destroyAllWindows()
 
-    # 透視変換用の変換行列 M を計算
     src_pts = np.float32(points)
     dst_pts = np.float32(
         [[0, 0], [OUT_WIDTH, 0], [OUT_WIDTH, OUT_HEIGHT], [0, OUT_HEIGHT]]
     )
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
 
-    # 全フレームの変換処理ループ
-    # 全フレームの変換処理ループ
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     tracks = {}
     save_frame(display_img,str(folder),str(cnt))
@@ -99,11 +96,6 @@ def camera_starting(video_path):
         if not ret:
             break
         cropped_frame = cv2.warpPerspective(frame, M, (OUT_WIDTH, OUT_HEIGHT))
-
-        # --------------------------------------------------
-        # ★ ここを追加・修正します！
-        # process_frame に cropped_frame と tracks を渡して検出＆描画を実行
-        # --------------------------------------------------
         cropped_frame, tracks,cell_dict = process_frame(cropped_frame, tracks,cell_dic=cell_dict,frame_no=frame_no,records=records)
 
         cv2.imshow("Cropped & Normalized Frame", cropped_frame)
@@ -114,11 +106,11 @@ def camera_starting(video_path):
     cap.release()
     cv2.destroyAllWindows()
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
-    save_cells_csv(records, "colored_cells.csv")
+    save_cells_csv(records, f"data/{video_stem}/colored_cells.csv")
     ave = cells_ave(cell_dict,fps)
-    save_lrt_csv(cell_dict, save_path="test_folder/cell_lrt_summary.csv")
+    save_lrt_csv(cell_dict, save_path=f"data/{video_stem}/cell_lrt_summary.csv")
     if base_frame is not None:
-        save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path="test_folder/lrt_mean_heatmap.png")
-        save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path="test_folder/lrt_max_heatmap.png")
+        save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path=f"data/{video_stem}/lrt_mean_heatmap.png")
+        save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path=f"data/{video_stem}/lrt_max_heatmap.png")
     print(ave)
 
