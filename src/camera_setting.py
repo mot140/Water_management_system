@@ -126,30 +126,4 @@ def camera_starting(video_path):
     # --- 既存のヒートマップ保存処理のあとに追加 ---
 
     # 1. 実測の軌跡データ(tracks)から、現在の流れやすさ・抵抗マップを抽出
-    resistance_map, mean_speed = extract_flow_resistance_from_tracks(tracks, fps=fps)
-
-    # 2. 現在の条件（例：勾配 3.0度）でのシミュレーション結果
-    sim_before = run_bead_simulation(
-        resistance_map,
-        base_speed=mean_speed,
-        base_slope_deg=3.0,
-        sim_slope_deg=3.0,
-        fps=int(round(fps)) or 30,
-    )
-
-    # 3. 条件を変えた場合（例：勾配を 5.5度に急にした場合）のシミュレーション
-    sim_after = run_bead_simulation(
-        resistance_map,
-        base_speed=mean_speed,
-        base_slope_deg=3.0,
-        sim_slope_deg=5.5,
-        fps=int(round(fps)) or 30,
-    )
-
-    # 4. 改善前後の比較画像を出力（simulation_comparison.png）
-    plot_simulation_comparison(
-        sim_before,
-        sim_after,
-        title_before="Before (3.0 deg)",
-        title_after="After (5.5 deg)",
-    )
+    best_design, df_rank = find_optimal_design(csv_path="test_folder/cell_lrt_summary.csv", base_slope_deg=3.0)

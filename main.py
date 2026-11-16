@@ -1,7 +1,9 @@
 from src.camera_setting import camera_starting
+from .setup import setup
 import glob
 
 def main():
+    setup()
     files = read_video_path_list()
     print("Files to process:", files)
     for file in files:
