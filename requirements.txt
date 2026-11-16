@@ -1,6 +1,7 @@
-opencv-python>=4.8.0
-numpy>=1.24.0
-matplotlib>=3.11.2
-pandas>=2.0.0
-cadquery>=2.8.0
-optuna>=5.0
+opencv-python
+numpy
+matplotlib
+pandas
+scikit-learn
+lightgbm
+optuna
