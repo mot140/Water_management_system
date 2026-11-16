@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 from .orbit_plt import *
 from .save_frame import *
-from .action import *
 import os
 # ★1. pointsはグローバル領域で定義する
 points = []
@@ -21,7 +20,7 @@ def camera_starting(video_path):
     points = []  # 再実行用に初期化
     OUT_WIDTH = 400
     OUT_HEIGHT = 800
-    folder = get_next_dir_number()
+    folder = get_next_dir_number(video_path)
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     print(fps)
@@ -116,14 +115,10 @@ def camera_starting(video_path):
     cv2.destroyAllWindows()
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
     save_cells_csv(records, "colored_cells.csv")
-    #sum_colored_cells(cell_dict)  # ← 追加：総塗りつぶしセル数を表示
     ave = cells_ave(cell_dict,fps)
     save_lrt_csv(cell_dict, save_path="test_folder/cell_lrt_summary.csv")
     if base_frame is not None:
         save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path="test_folder/lrt_mean_heatmap.png")
         save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path="test_folder/lrt_max_heatmap.png")
     print(ave)
-    # --- 既存のヒートマップ保存処理のあとに追加 ---
 
-    # 1. 実測の軌跡データ(tracks)から、現在の流れやすさ・抵抗マップを抽出
-    best_design, df_rank = find_optimal_design(csv_path="test_folder/cell_lrt_summary.csv", base_slope_deg=3.0)

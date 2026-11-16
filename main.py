@@ -1,5 +1,5 @@
 from src.camera_setting import camera_starting
-from .setup import setup
+from setup import setup
 import glob
 
 def main():
