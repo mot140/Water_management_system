@@ -1,6 +1,3 @@
 exp_id,furrow_type,field_shape,slope_pct,groove_width_cm,csv_path
-1,V字,川,0,10,data/exp01_v_kawa_0pct_10cm.csv
-2,V字,川,0,20,data/exp02_v_kawa_0pct_20cm.csv
-3,V字,川,1,10,data/exp03_v_kawa_1pct_10cm.csv
-4,V字,川,1,20,data/exp04_v_kawa_1pct_20cm.csv
-5,V字,十字,0,10,data/exp05_v_cross_0pct_10cm.csv
+1,square,square,0,10,"data/input_data/cell_lrt_summary.csv"
+2,square,square,1,10,"data/input_test/cell_lrt_summary.csv"
