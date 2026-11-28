@@ -246,11 +246,20 @@ def update_lrt_frames(cell_dic, active_beads_cells):
                 cell_dic[(r, c)]["active_beads"][bead_id] = 1
 
 
-def process_frame(img, tracks, cell_dic: dict, max_distance=40, draw_orbit=False, show_grid=True, touch_radius=5, frame_no=0, records=None):
+def process_frame(img, tracks, cell_dic: dict, max_distance=40, draw_orbit=False, show_grid=True, touch_radius=5, frame_no=0, records=None, dispersion_records=None):
     """1フレームごとの検出・格子の塗りつぶし・格子線表示・トラッキング"""
     mask = blue_detect(img)
     centers = get_centers(mask)
     h, w = img.shape[:2]
+
+    if dispersion_records is not None:
+        frame_counts = np.zeros((ROWS, COLS), dtype=np.int64)
+        for cx, cy in centers:
+            if 0 <= cx < w and 0 <= cy < h:
+                col = min(cx * COLS // w, COLS - 1)
+                row = min(cy * ROWS // h, ROWS - 1)
+                frame_counts[row, col] += 1
+        dispersion_records.append(calc_dispersion_metrics(frame_counts, frame_no))
 
     # centerに触れている格子セルを塗る
     img, colored_cells = fill_cells(img, centers, touch_radius=touch_radius)
@@ -421,3 +430,84 @@ def save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", alpha=0.55, save_pat
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"ヒートマップを保存しました: {save_path}")
+
+def calc_dispersion_metrics(counts, frame_no=None):
+    """格子上のビーズ数から、均等度・変動係数・カバー率を算出する。"""
+    counts = np.asarray(counts, dtype=np.float64).ravel()
+    total_cells = len(counts)
+    total_beads = float(np.sum(counts))
+    visited_cells = int(np.count_nonzero(counts > 0))
+    coverage_ratio = visited_cells / total_cells if total_cells else 0.0
+
+    if total_beads == 0 or total_cells == 0:
+        evenness = 0.0
+        cv = 0.0
+    else:
+        mean_val = float(np.mean(counts))
+        std_val = float(np.std(counts))
+        cv = std_val / mean_val if mean_val > 0 else 0.0
+        probs = counts[counts > 0] / total_beads
+        entropy = -float(np.sum(probs * np.log(probs)))
+        max_entropy = float(np.log(total_cells))
+        evenness = entropy / max_entropy if max_entropy > 0 else 0.0
+
+    result = {
+        "bead_count": int(total_beads),
+        "evenness": round(float(evenness), 4),
+        "cv": round(float(cv), 4),
+        "coverage_ratio": round(float(coverage_ratio), 4),
+        "visited_cells": visited_cells,
+    }
+    if frame_no is not None:
+        result = {"frame": int(frame_no), **result}
+    return result
+
+
+def save_frame_dispersion_csv(records, save_path="data/frame_dispersion.csv"):
+    """フレームごとのビーズ分散度をCSVに保存する。"""
+    fieldnames = ["frame", "bead_count", "evenness", "cv", "coverage_ratio", "visited_cells"]
+    with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
+    print(f"フレームごとの分散度を保存しました: {save_path}")
+
+
+# 分散度算出
+def calc_spatial_dispersion(cell_dict: dict):
+    counts = np.array([val["con"] for val in cell_dict.values()], dtype=np.float64)
+    total_cells = len(counts)
+    total_hits = np.sum(counts)
+    print(total_hits)
+    if total_hits == 0:
+        return {
+            "evenness": 0.0,
+            "cv": 0.0,
+            "coverage_ratio": 0.0,
+            "coverage_percent": 0.0,
+            "visited_cells": 0,
+        }
+
+    # 1回以上通過したセル数とカバー率を算出
+    visited_cells = np.count_nonzero(counts > 0)
+    coverage_ratio = visited_cells / total_cells
+
+    # 変動係数 (CV)
+    mean_val = np.mean(counts)
+    print(mean_val)
+    std_val = np.std(counts)
+    cv = std_val / mean_val if mean_val > 0 else 0.0
+
+    # 正規化シャノンエントロピー (均等度)
+    probs = counts[counts > 0] / total_hits
+    entropy = -np.sum(probs * np.log(probs))
+    max_entropy = np.log(total_cells)
+    evenness = entropy / max_entropy if max_entropy > 0 else 0.0
+
+    return {
+        "evenness": round(float(evenness), 4),             # 均等度 (0~1, 高いほど分散)
+        "cv": round(float(cv), 4),                         # 変動係数 (低いほど分散)
+        "coverage_ratio": round(float(coverage_ratio), 4), # 通過セル率 (0~1)
+        "coverage_percent": round(float(coverage_ratio * 100), 2), # 動画全体の分散割合 (%)
+        "visited_cells": int(visited_cells),               # 通過したセル数
+    }

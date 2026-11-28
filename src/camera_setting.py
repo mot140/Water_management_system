@@ -28,6 +28,7 @@ def camera_starting(video_path):
     cnt = 0
     tracks = {}
     records = []          # ← 追加：塗ったセルの記録用
+    dispersion_records = []
     frame_no = 0
     if not cap.isOpened():
         print("動画を開けませんでした")
@@ -97,7 +98,7 @@ def camera_starting(video_path):
         if not ret:
             break
         cropped_frame = cv2.warpPerspective(frame, M, (OUT_WIDTH, OUT_HEIGHT))
-        cropped_frame, tracks,cell_dict = process_frame(cropped_frame, tracks,cell_dic=cell_dict,frame_no=frame_no,records=records)
+        cropped_frame, tracks,cell_dict = process_frame(cropped_frame, tracks,cell_dic=cell_dict,frame_no=cnt,records=records,dispersion_records=dispersion_records)
 
         cv2.imshow("Cropped & Normalized Frame", cropped_frame)
         save_frame(cropped_frame,str(folder),str(cnt))
@@ -108,10 +109,18 @@ def camera_starting(video_path):
     cv2.destroyAllWindows()
     plot_trajectories(tracks, OUT_WIDTH, OUT_HEIGHT)
     save_cells_csv(records, f"data/{video_stem}/colored_cells.csv")
+    save_frame_dispersion_csv(dispersion_records, f"data/{video_stem}/frame_dispersion.csv")
     ave = cells_ave(cell_dict,fps)
     save_lrt_csv(cell_dict, save_path=f"data/{video_stem}/cell_lrt_summary.csv")
+    dispersion = calc_spatial_dispersion(cell_dict)
+    print(dispersion)
+    print(f"累積分散割合（動画中に一度でも検出）: {dispersion['coverage_percent']}% ({dispersion['visited_cells']}/{All_cells} cells)")
+    if dispersion_records:
+        mean_frame_coverage = sum(row["coverage_ratio"] for row in dispersion_records) / len(dispersion_records)
+        print(f"平均分散割合（各フレームの占有格子率の平均）: {mean_frame_coverage * 100:.2f}% ({len(dispersion_records)} frames)")
+        total_bead_detections = sum(row["bead_count"] for row in dispersion_records)
+        print(f"総ビーズ検出数（フレームごとの検出数の合計）: {total_bead_detections}")
     if base_frame is not None:
         save_lrt_heatmap(base_frame, cell_dict, key="mean_lrt", save_path=f"data/{video_stem}/lrt_mean_heatmap.png")
         save_lrt_heatmap(base_frame, cell_dict, key="max_lrt", save_path=f"data/{video_stem}/lrt_max_heatmap.png")
-    print(ave)
 
